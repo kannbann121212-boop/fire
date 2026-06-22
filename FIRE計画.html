@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔥 FIRE計画</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,sans-serif;background:#f0f2f5;padding:12px;max-width:600px;margin:auto}
+h1{font-size:22px;text-align:center;margin:12px 0;color:#333}
+.card{background:#fff;border-radius:14px;padding:16px;margin:10px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+/* 入力エリア */
+.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.input-item label{display:block;font-size:12px;color:#888;margin-bottom:4px}
+.input-item input{width:100%;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:15px;text-align:right}
+.input-item.full{grid-column:1/-1}
+.save-btn{width:100%;padding:14px;background:#ff6b35;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}
+.save-btn:active{background:#e55a25}
+
+/* 総資産 */
+.total-label{font-size:13px;color:#888;margin-bottom:4px}
+.total-num{font-size:36px;font-weight:bold;color:#ff6b35}
+.progress-bar-wrap{background:#eee;border-radius:8px;height:10px;margin:8px 0 4px}
+.progress-bar{background:#ff6b35;border-radius:8px;height:10px;transition:.4s}
+.progress-text{font-size:13px;color:#666}
+
+/* 内訳 */
+.breakdown-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:15px}
+.breakdown-row:last-child{border-bottom:none;font-weight:bold;color:#333}
+.breakdown-label{color:#555}
+.breakdown-val{color:#333}
+
+/* 予測テーブル */
+.forecast-title{font-size:15px;font-weight:bold;margin-bottom:10px;color:#333}
+table{width:100%;border-collapse:collapse}
+th{background:#fff8f5;color:#ff6b35;font-size:13px;padding:8px;border-bottom:2px solid #ffe0d0}
+td{padding:10px 8px;text-align:center;font-size:14px;border-bottom:1px solid #f5f5f5}
+tr:last-child td{border-bottom:none}
+
+/* 履歴 */
+.hist-title{font-size:15px;font-weight:bold;margin-bottom:8px;color:#333}
+.hist-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f5f5f5;font-size:13px;color:#555}
+.hist-row:last-child{border-bottom:none}
+
+/* グラフ */
+#chartWrap{height:280px}
+</style>
+</head>
+<body>
+<h1>🔥 FIRE計画</h1>
+
+<!-- 入力カード -->
+<div class="card">
+  <div class="input-grid">
+    <div class="input-item">
+      <label>楽天証券</label>
+      <input id="rakuten" type="number" inputmode="numeric" value="0">
+    </div>
+    <div class="input-item">
+      <label>iDeCo</label>
+      <input id="ideco" type="number" inputmode="numeric" value="0">
+    </div>
+    <div class="input-item">
+      <label>現金</label>
+      <input id="cash" type="number" inputmode="numeric" value="0">
+    </div>
+    <div class="input-item">
+      <label>毎月積立額</label>
+      <input id="monthly" type="number" inputmode="numeric" value="0">
+    </div>
+    <div class="input-item full">
+      <label>FIRE目標額</label>
+      <input id="target" type="number" inputmode="numeric" value="0">
+    </div>
+  </div>
+  <button class="save-btn" onclick="saveAndUpdate()">💾 保存して更新</button>
+</div>
+
+<!-- 総資産 -->
+<div class="card">
+  <div class="total-label">総資産</div>
+  <div id="totalAsset" class="total-num"></div>
+  <div class="progress-bar-wrap"><div id="pBar" class="progress-bar" style="width:0%"></div></div>
+  <div id="progress" class="progress-text"></div>
+</div>
+
+<!-- 内訳 -->
+<div class="card" id="breakdown"></div>
+
+<!-- FIRE予測 -->
+<div class="card" id="forecast"></div>
+
+<!-- グラフ -->
+<div class="card">
+  <div style="font-size:15px;font-weight:bold;margin-bottom:10px;color:#333">📈 資産推移シミュレーション</div>
+  <div id="chartWrap"><canvas id="fireChart"></canvas></div>
+</div>
+
+<!-- 履歴 -->
+<div class="card" id="history"></div>
+
+<script>
+let chart=null;
+const fmt=n=>Number(n).toLocaleString('ja-JP')+'円';
+const num=id=>Number(document.getElementById(id).value)||0;
+
+function total(){ return num('rakuten')+num('ideco')+num('cash'); }
+
+function simulate(rate){
+  let asset=num('rakuten')+num('ideco');
+  let cashFixed=num('cash');
+  let goal=num('target');
+  let add=num('monthly');
+  let mr=Math.pow(1+rate/100,1/12)-1;
+  for(let m=1;m<=600;m++){
+    asset=asset*(1+mr)+add;
+    if(asset+cashFixed>=goal) return m;
+  }
+  return 600;
+}
+
+function amountAfterYears(rate,years){
+  let asset=num('rakuten')+num('ideco');
+  let cashFixed=num('cash');
+  let add=num('monthly');
+  let mr=Math.pow(1+rate/100,1/12)-1;
+  for(let i=0;i<years*12;i++) asset=asset*(1+mr)+add;
+  return Math.round(asset+cashFixed);
+}
+
+function saveAndUpdate(){
+  const month=new Date().toISOString().slice(0,7);
+  let hist=JSON.parse(localStorage.getItem("fire_v63_history")||"[]");
+  const row={month,asset:total(),monthly:num('monthly')};
+  const idx=hist.findIndex(x=>x.month===month);
+  if(idx>=0) hist[idx]=row; else hist.push(row);
+  localStorage.setItem("fire_v63_history",JSON.stringify(hist));
+  render();
+}
+
+function render(){
+  const t=total(), goal=num('target');
+  const pct=Math.min(t/goal*100,100);
+
+  document.getElementById('totalAsset').textContent=fmt(t);
+  document.getElementById('pBar').style.width=pct.toFixed(1)+'%';
+  document.getElementById('progress').textContent='目標まで '+fmt(Math.max(goal-t,0))+' （達成率 '+pct.toFixed(1)+'%）';
+
+  document.getElementById('breakdown').innerHTML=`
+    <div class="breakdown-row"><span class="breakdown-label">📊 楽天証券</span><span class="breakdown-val">${fmt(num('rakuten'))}</span></div>
+    <div class="breakdown-row"><span class="breakdown-label">🏦 iDeCo</span><span class="breakdown-val">${fmt(num('ideco'))}</span></div>
+    <div class="breakdown-row"><span class="breakdown-label">💴 現金</span><span class="breakdown-val">${fmt(num('cash'))}</span></div>
+    <div class="breakdown-row"><span class="breakdown-label">合計</span><span class="breakdown-val">${fmt(t)}</span></div>`;
+
+  let html='<div class="forecast-title">🔥 FIREまでの予測</div><table><tr><th>利回り</th><th>あと何年？</th><th>達成年齢</th></tr>';
+  [5,7,10].forEach(r=>{
+    let m=simulate(r);
+    html+=`<tr><td>${r}%</td><td>${Math.floor(m/12)}年${m%12}か月</td><td>${(46+m/12).toFixed(1)}歳</td></tr>`;
+  });
+  html+='</table>';
+  document.getElementById('forecast').innerHTML=html;
+
+  const labels=["現在"];
+  for(let i=1;i<=10;i++) labels.push(i+"年後");
+  const d5=[],d7=[],d10=[];
+  for(let i=0;i<=10;i++){
+    d5.push(amountAfterYears(5,i));
+    d7.push(amountAfterYears(7,i));
+    d10.push(amountAfterYears(10,i));
+  }
+
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("fireChart"),{
+    type:"line",
+    data:{labels,datasets:[
+      {label:"5%",data:d5,borderColor:"#74b9ff",backgroundColor:"rgba(116,185,255,.1)",tension:.3,fill:false},
+      {label:"7%",data:d7,borderColor:"#00b894",backgroundColor:"rgba(0,184,148,.1)",tension:.3,fill:false},
+      {label:"10%",data:d10,borderColor:"#fd79a8",backgroundColor:"rgba(253,121,168,.1)",tension:.3,fill:false},
+      {label:"目標",data:new Array(labels.length).fill(goal),borderColor:"#ff6b35",borderDash:[8,5],pointRadius:0,tension:0,fill:false}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{y:{ticks:{callback:v=>(v/10000).toFixed(0)+'万',font:{size:11}},grid:{color:"#f0f0f0"}},x:{ticks:{font:{size:11}}}},
+      plugins:{
+        legend:{labels:{font:{size:11},boxWidth:20}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+": "+(c.parsed.y/10000).toFixed(0)+"万円"}}
+      }
+    }
+  });
+
+  let hist=JSON.parse(localStorage.getItem("fire_v63_history")||"[]");
+  let hhtml='<div class="hist-title">📋 記録履歴</div>';
+  if(hist.length===0){
+    hhtml+='<div style="color:#aaa;font-size:13px">まだ記録がありません</div>';
+  } else {
+    hhtml+=hist.slice().reverse().map(h=>`
+      <div class="hist-row"><span>${h.month}</span><span>${fmt(h.asset)}</span></div>`).join('');
+  }
+  document.getElementById('history').innerHTML=hhtml;
+}
+
+render();
+</script>
+</body>
+</html>
