@@ -1,0 +1,20 @@
+{
+  "name": "FIRE計画",
+  "short_name": "FIRE",
+  "display": "standalone",
+  "start_url": "./",
+  "theme_color": "#ff6a00",
+  "background_color": "#ff6a00",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
